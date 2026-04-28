@@ -129,6 +129,23 @@ struct PlaygroundState: Equatable {
     var selectedExampleID: String?
     var valuesByExampleID: [String: ExampleValues] = [:]
 
+    mutating func prepare(for symbol: InteractiveSymbol) {
+        if
+            let selectedExampleID,
+            symbol.examples.contains(where: { $0.id == selectedExampleID })
+        {
+            if let selectedExample = symbol.examples.first(where: { $0.id == selectedExampleID }) {
+                ensureDefaultValues(for: selectedExample)
+            }
+            return
+        }
+
+        selectedExampleID = symbol.examples.first?.id
+        if let selectedExample = symbol.examples.first {
+            ensureDefaultValues(for: selectedExample)
+        }
+    }
+
     mutating func reset(for symbol: InteractiveSymbol) {
         selectedExampleID = symbol.examples.first?.id
         valuesByExampleID = Dictionary(
@@ -144,6 +161,15 @@ struct PlaygroundState: Equatable {
 
     mutating func reset(_ example: SwiftUIExample) {
         valuesByExampleID[example.id] = example.defaultValues
+    }
+
+    mutating func selectExample(id: String, for symbol: InteractiveSymbol) {
+        guard let example = symbol.examples.first(where: { $0.id == id }) else {
+            return
+        }
+
+        selectedExampleID = example.id
+        ensureDefaultValues(for: example)
     }
 
     func selectedExample(for symbol: InteractiveSymbol) -> SwiftUIExample? {
@@ -1277,6 +1303,7 @@ struct ExamplePicker: View {
             }
         }
         .pickerStyle(.segmented)
+        .id(examples.map(\.id).joined(separator: "|"))
     }
 }
 
@@ -1310,6 +1337,7 @@ struct PlaygroundInspectorPanel: View {
             if let selectedExample {
                 Section("Controls") {
                     selectedExample.controls(values: valuesBinding(for: selectedExample))
+                        .id(selectedExample.id)
                 }
 
                 Section {
@@ -1331,16 +1359,16 @@ struct PlaygroundInspectorPanel: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            state.prepare(for: symbol)
+        }
     }
 
     private func selectedExampleIDBinding(fallback: String) -> Binding<String> {
         Binding(
             get: { state.selectedExampleID ?? fallback },
             set: { newValue in
-                state.selectedExampleID = newValue
-                if let example = symbol.examples.first(where: { $0.id == newValue }) {
-                    state.ensureDefaultValues(for: example)
-                }
+                state.selectExample(id: newValue, for: symbol)
             }
         )
     }
@@ -1940,18 +1968,20 @@ private struct ExampleDeveloperPreview: View {
                             examples: examples,
                             selection: Binding(
                                 get: { state.selectedExampleID ?? example.id },
-                                set: { state.selectedExampleID = $0 }
+                                set: { state.selectExample(id: $0, for: symbol) }
                             )
                         )
                     }
 
                     LivePreviewCanvas(example: example, values: state.values(for: example))
+                        .id(example.id)
 
                     DetailSectionForPreview(title: "Controls") {
                         example.controls(values: Binding(
                             get: { state.values(for: example) },
                             set: { state.valuesByExampleID[example.id] = $0 }
                         ))
+                        .id(example.id)
                     }
 
                     HighlightedCodeBlock(title: "Generated Code", code: example.code(values: state.values(for: example)))
@@ -1959,9 +1989,7 @@ private struct ExampleDeveloperPreview: View {
                 .padding()
             }
             .onAppear {
-                if state.selectedExampleID == nil {
-                    state.reset(for: symbol)
-                }
+                state.prepare(for: symbol)
             }
         } else {
             ContentUnavailableView("No Examples", systemImage: "curlybraces.square")

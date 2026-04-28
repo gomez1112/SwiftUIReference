@@ -129,9 +129,10 @@ private struct InteractiveExampleSection: View {
                     example: selectedExample,
                     values: playgroundState.values(for: selectedExample)
                 )
+                .id(selectedExample.id)
             }
             .onAppear {
-                playgroundState.ensureDefaultValues(for: selectedExample)
+                playgroundState.prepare(for: symbol)
             }
         }
     }
@@ -140,10 +141,7 @@ private struct InteractiveExampleSection: View {
         Binding(
             get: { playgroundState.selectedExampleID ?? fallback },
             set: { newValue in
-                playgroundState.selectedExampleID = newValue
-                if let example = symbol.examples.first(where: { $0.id == newValue }) {
-                    playgroundState.ensureDefaultValues(for: example)
-                }
+                playgroundState.selectExample(id: newValue, for: symbol)
             }
         )
     }
