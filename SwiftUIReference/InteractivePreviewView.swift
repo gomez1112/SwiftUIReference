@@ -1309,26 +1309,47 @@ struct ExamplePicker: View {
 
 // MARK: - Inspector Panel
 
-struct PlaygroundInspectorPanel: View {
-    let symbol: InteractiveSymbol
+struct SymbolInspectorPanel: View {
+    let symbol: IndexedSwiftSymbol
+    let interactiveSymbol: InteractiveSymbol?
     @Binding var state: PlaygroundState
     @Environment(\.colorScheme) private var colorScheme
+    @State private var summaryGenerator = SymbolSummaryGenerator()
 
     private var selectedExample: SwiftUIExample? {
-        state.selectedExample(for: symbol)
+        guard let interactiveSymbol else { return nil }
+        return state.selectedExample(for: interactiveSymbol)
+    }
+
+    private var summaryContext: SymbolSummaryContext {
+        let example = selectedExample
+        let values = example.map { state.values(for: $0) }
+
+        return SymbolSummaryContext(
+            name: symbol.name,
+            kind: symbol.kind.singularTitle,
+            category: symbol.categoryName,
+            declaration: symbol.declaration,
+            defaultInstantiation: symbol.defaultInstantiation.strippingTokenize,
+            exampleTitle: example?.title,
+            exampleSummary: example?.summary,
+            exampleCode: example.flatMap { example in
+                values.map { example.code(values: $0) }
+            }
+        )
     }
 
     var body: some View {
         Form {
             Section {
-                Label(symbol.displayName, systemImage: "slider.horizontal.3")
+                Label(symbol.name, systemImage: symbol.kind.systemImage)
                     .font(.headline)
             }
 
-            if symbol.examples.count > 1, let selectedExample {
+            if let interactiveSymbol, interactiveSymbol.examples.count > 1, let selectedExample {
                 Section("Example") {
                     ExamplePicker(
-                        examples: symbol.examples,
+                        examples: interactiveSymbol.examples,
                         selection: selectedExampleIDBinding(fallback: selectedExample.id)
                     )
                 }
@@ -1357,10 +1378,23 @@ struct PlaygroundInspectorPanel: View {
                     .textSelection(.enabled)
                 }
             }
+
+            FoundationModelSummarySection(
+                generator: summaryGenerator,
+                context: summaryContext
+            )
         }
         .formStyle(.grouped)
         .onAppear {
-            state.prepare(for: symbol)
+            if let interactiveSymbol {
+                state.prepare(for: interactiveSymbol)
+            }
+        }
+        .onChange(of: symbol.stableID) {
+            summaryGenerator.reset()
+            if let interactiveSymbol {
+                state.prepare(for: interactiveSymbol)
+            }
         }
     }
 
@@ -1368,7 +1402,8 @@ struct PlaygroundInspectorPanel: View {
         Binding(
             get: { state.selectedExampleID ?? fallback },
             set: { newValue in
-                state.selectExample(id: newValue, for: symbol)
+                guard let interactiveSymbol else { return }
+                state.selectExample(id: newValue, for: interactiveSymbol)
             }
         )
     }
@@ -1378,6 +1413,51 @@ struct PlaygroundInspectorPanel: View {
             get: { state.values(for: example) },
             set: { state.valuesByExampleID[example.id] = $0 }
         )
+    }
+}
+
+private struct FoundationModelSummarySection: View {
+    let generator: SymbolSummaryGenerator
+    let context: SymbolSummaryContext
+
+    private var message: String? {
+        generator.statusMessage ?? generator.unavailableMessage
+    }
+
+    var body: some View {
+        Section("Foundation Model") {
+            if !generator.summary.isEmpty {
+                Text(generator.summary)
+                    .font(.callout)
+                    .textSelection(.enabled)
+            }
+
+            if let message {
+                Label(message, systemImage: generator.unavailableMessage == nil ? "info.circle" : "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            if generator.isStreaming {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Button {
+                generator.generateSummary(for: context)
+            } label: {
+                Label(buttonTitle, systemImage: "sparkles")
+            }
+            .disabled(!generator.canGenerate)
+        }
+    }
+
+    private var buttonTitle: String {
+        if generator.isStreaming {
+            return "Summarizing"
+        }
+
+        return generator.summary.isEmpty ? "Summarize Usage" : "Regenerate Summary"
     }
 }
 

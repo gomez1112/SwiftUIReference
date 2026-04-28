@@ -48,7 +48,7 @@ struct SymbolDetailView: View {
         .navigationTitle(symbol?.name ?? "Details")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                if interactiveSymbol != nil {
+                if symbol != nil {
                     Button {
                         withAnimation {
                             showInspector.toggle()
@@ -61,8 +61,12 @@ struct SymbolDetailView: View {
             }
         }
         .inspector(isPresented: $showInspector) {
-            if let interactive = interactiveSymbol {
-                PlaygroundInspectorPanel(symbol: interactive, state: $playgroundState)
+            if let symbol {
+                SymbolInspectorPanel(
+                    symbol: symbol,
+                    interactiveSymbol: interactiveSymbol,
+                    state: $playgroundState
+                )
                     .inspectorColumnWidth(min: 260, ideal: 300, max: 360)
             }
         }
