@@ -129,35 +129,6 @@ final class IndexRun {
     }
 }
 
-@Model
-final class ManualSymbolExample {
-    var id: String = UUID().uuidString
-    var symbolStableID: String = ""
-    var title: String = ""
-    var summary: String = ""
-    var code: String = ""
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
-
-    init(
-        id: String = UUID().uuidString,
-        symbolStableID: String,
-        title: String,
-        summary: String = "",
-        code: String,
-        createdAt: Date = .now,
-        updatedAt: Date = .now
-    ) {
-        self.id = id
-        self.symbolStableID = symbolStableID
-        self.title = title
-        self.summary = summary
-        self.code = code
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
-}
-
 struct ExtractedSwiftSymbol: Identifiable, Codable, Hashable {
     var id: String
     var name: String

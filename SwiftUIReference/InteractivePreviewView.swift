@@ -76,6 +76,61 @@ struct SwiftUIExample: Identifiable {
     }
 }
 
+extension SwiftUIExample {
+    static func view<Preview: View, Controls: View>(
+        id: String,
+        title: String,
+        summary: String = "",
+        symbolNames: [String],
+        defaultValues: ExampleValues = ExampleValues(),
+        @ViewBuilder preview: @escaping (ExampleValues) -> Preview,
+        @ViewBuilder controls: @escaping (Binding<ExampleValues>) -> Controls,
+        code: @escaping (ExampleValues) -> String
+    ) -> SwiftUIExample {
+        SwiftUIExample(
+            id: id,
+            title: title,
+            summary: summary,
+            match: SymbolExampleMatch(kind: .view, names: symbolNames),
+            defaultValues: defaultValues,
+            preview: preview,
+            controls: controls,
+            code: code
+        )
+    }
+
+    static func modifier<Preview: View, Controls: View>(
+        id: String,
+        title: String,
+        summary: String = "",
+        names: [String] = [],
+        prefixes: [String] = [],
+        contains: [String] = [],
+        excludingContains excludedContains: [String] = [],
+        defaultValues: ExampleValues = ExampleValues(),
+        @ViewBuilder preview: @escaping (ExampleValues) -> Preview,
+        @ViewBuilder controls: @escaping (Binding<ExampleValues>) -> Controls,
+        code: @escaping (ExampleValues) -> String
+    ) -> SwiftUIExample {
+        SwiftUIExample(
+            id: id,
+            title: title,
+            summary: summary,
+            match: SymbolExampleMatch(
+                kind: .modifier,
+                names: names,
+                prefixes: prefixes,
+                contains: contains,
+                excludingContains: excludedContains
+            ),
+            defaultValues: defaultValues,
+            preview: preview,
+            controls: controls,
+            code: code
+        )
+    }
+}
+
 struct SymbolExampleMatch {
     let kind: SwiftUISymbolKind
     private let exactNames: Set<String>
@@ -273,7 +328,7 @@ extension Binding where Value == ExampleValues {
 // MARK: - Catalog
 
 enum SwiftUIExampleCatalog {
-    static let examples: [SwiftUIExample] = modifierExamples + viewExamples
+    static let examples: [SwiftUIExample] = customExamples + modifierExamples + viewExamples
 
     static func examples(for symbol: IndexedSwiftSymbol) -> [SwiftUIExample] {
         examples.filter { $0.matches(symbol) }
@@ -285,6 +340,11 @@ enum SwiftUIExampleCatalog {
 }
 
 private extension SwiftUIExampleCatalog {
+    static let customExamples: [SwiftUIExample] = [
+        // Add hand-coded examples here. Multiple entries can target the same symbol.
+        // Use .view(symbolNames: ["AsyncImage"], ...) or .modifier(prefixes: ["padding"], ...).
+    ]
+
     static let modifierExamples: [SwiftUIExample] = [
         SwiftUIExample(
             id: "modifier.padding.basic",
@@ -855,11 +915,11 @@ private extension SwiftUIExampleCatalog {
         }
     )
 
-    static let asyncImageExample = SwiftUIExample(
+    static let asyncImageExample = SwiftUIExample.view(
         id: "view.asyncImage.remote",
         title: "Remote Image",
         summary: "Loads a remote image and renders loading, success, and failure states.",
-        match: SymbolExampleMatch(kind: .view, names: ["AsyncImage"]),
+        symbolNames: ["AsyncImage"],
         defaultValues: ExampleValues(
             doubles: ["scale": 1, "cornerRadius": 14, "width": 220, "height": 150],
             strings: ["url": "https://picsum.photos/seed/swiftui-reference/640/420"]
