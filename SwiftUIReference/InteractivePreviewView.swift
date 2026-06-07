@@ -76,6 +76,61 @@ struct SwiftUIExample: Identifiable {
     }
 }
 
+extension SwiftUIExample {
+    static func view<Preview: View, Controls: View>(
+        id: String,
+        title: String,
+        summary: String = "",
+        symbolNames: [String],
+        defaultValues: ExampleValues = ExampleValues(),
+        @ViewBuilder preview: @escaping (ExampleValues) -> Preview,
+        @ViewBuilder controls: @escaping (Binding<ExampleValues>) -> Controls,
+        code: @escaping (ExampleValues) -> String
+    ) -> SwiftUIExample {
+        SwiftUIExample(
+            id: id,
+            title: title,
+            summary: summary,
+            match: SymbolExampleMatch(kind: .view, names: symbolNames),
+            defaultValues: defaultValues,
+            preview: preview,
+            controls: controls,
+            code: code
+        )
+    }
+
+    static func modifier<Preview: View, Controls: View>(
+        id: String,
+        title: String,
+        summary: String = "",
+        names: [String] = [],
+        prefixes: [String] = [],
+        contains: [String] = [],
+        excludingContains excludedContains: [String] = [],
+        defaultValues: ExampleValues = ExampleValues(),
+        @ViewBuilder preview: @escaping (ExampleValues) -> Preview,
+        @ViewBuilder controls: @escaping (Binding<ExampleValues>) -> Controls,
+        code: @escaping (ExampleValues) -> String
+    ) -> SwiftUIExample {
+        SwiftUIExample(
+            id: id,
+            title: title,
+            summary: summary,
+            match: SymbolExampleMatch(
+                kind: .modifier,
+                names: names,
+                prefixes: prefixes,
+                contains: contains,
+                excludingContains: excludedContains
+            ),
+            defaultValues: defaultValues,
+            preview: preview,
+            controls: controls,
+            code: code
+        )
+    }
+}
+
 struct SymbolExampleMatch {
     let kind: SwiftUISymbolKind
     private let exactNames: Set<String>
@@ -273,7 +328,7 @@ extension Binding where Value == ExampleValues {
 // MARK: - Catalog
 
 enum SwiftUIExampleCatalog {
-    static let examples: [SwiftUIExample] = modifierExamples + viewExamples
+    static let examples: [SwiftUIExample] = customExamples + modifierExamples + viewExamples
 
     static func examples(for symbol: IndexedSwiftSymbol) -> [SwiftUIExample] {
         examples.filter { $0.matches(symbol) }
@@ -285,6 +340,11 @@ enum SwiftUIExampleCatalog {
 }
 
 private extension SwiftUIExampleCatalog {
+    static let customExamples: [SwiftUIExample] = [
+        // Add hand-coded examples here. Multiple entries can target the same symbol.
+        // Use .view(symbolNames: ["AsyncImage"], ...) or .modifier(prefixes: ["padding"], ...).
+    ]
+
     static let modifierExamples: [SwiftUIExample] = [
         SwiftUIExample(
             id: "modifier.padding.basic",
@@ -634,6 +694,7 @@ private extension SwiftUIExampleCatalog {
         canvasStrokeExample,
         canvasFillExample,
         textExample,
+        asyncImageExample,
         imageExample,
         colorExample,
         shapeExample(.circle),
@@ -854,6 +915,82 @@ private extension SwiftUIExampleCatalog {
         }
     )
 
+    static let asyncImageExample = SwiftUIExample.view(
+        id: "view.asyncImage.remote",
+        title: "Remote Image",
+        summary: "Loads a remote image and renders loading, success, and failure states.",
+        symbolNames: ["AsyncImage"],
+        defaultValues: ExampleValues(
+            doubles: ["scale": 1, "cornerRadius": 14, "width": 220, "height": 150],
+            strings: ["url": "https://picsum.photos/seed/swiftui-reference/640/420"]
+        ),
+        preview: { values in
+            let url = URL(string: values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420"))
+            AsyncImage(url: url, scale: values.double("scale", default: 1)) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .background(.thinMaterial, in: .rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .clipShape(.rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                case .failure:
+                    ContentUnavailableView("Image failed", systemImage: "photo.badge.exclamationmark")
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .background(.thinMaterial, in: .rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        },
+        controls: { values in
+            TextField("Image URL", text: values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420"))
+            LabeledSlider(label: "Scale", value: values.cgFloat("scale", default: 1), range: 0.5...3, unit: "x", step: 0.25)
+            LabeledSlider(label: "Width", value: values.cgFloat("width", default: 220), range: 120...360)
+            LabeledSlider(label: "Height", value: values.cgFloat("height", default: 150), range: 90...280)
+            LabeledSlider(label: "Corner Radius", value: values.cgFloat("cornerRadius", default: 14), range: 0...40)
+        },
+        code: { values in
+            """
+            AsyncImage(
+                url: URL(string: \(ExampleFormat.stringLiteral(values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420")))),
+                scale: \(ExampleFormat.number(values.double("scale", default: 1)))
+            ) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(
+                            width: \(ExampleFormat.number(values.cgFloat("width", default: 220))),
+                            height: \(ExampleFormat.number(values.cgFloat("height", default: 150)))
+                        )
+                        .clipShape(.rect(cornerRadius: \(ExampleFormat.number(values.cgFloat("cornerRadius", default: 14)))))
+                case .failure:
+                    ContentUnavailableView("Image failed", systemImage: "photo.badge.exclamationmark")
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            """
+        }
+    )
+
     static let imageExample = SwiftUIExample(
         id: "view.image.symbol",
         title: "SF Symbol Image",
@@ -946,10 +1083,14 @@ private extension SwiftUIExampleCatalog {
         title: "Scrollable Items",
         summary: "Switches between vertical and horizontal scrolling.",
         match: SymbolExampleMatch(kind: .view, names: ["ScrollView"]),
-        defaultValues: ExampleValues(doubles: ["height": 180], ints: ["items": 20], bools: ["vertical": true]),
+        defaultValues: ExampleValues(
+            doubles: ["height": 180],
+            ints: ["items": 20, "axis": ScrollAxisChoice.vertical.rawValue]
+        ),
         preview: { values in
+            let axis = ScrollAxisChoice.selection(values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
             Group {
-                if values.bool("vertical", default: true) {
+                if axis == .vertical {
                     ScrollView(.vertical) {
                         VStack(spacing: 8) {
                             ForEach(0..<values.int("items", default: 20), id: \.self) { index in
@@ -979,14 +1120,15 @@ private extension SwiftUIExampleCatalog {
             .frame(maxWidth: 300)
         },
         controls: { values in
-            Toggle("Vertical Axis", isOn: values.bool("vertical", default: true))
+            ScrollAxisPicker(selection: values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
             Stepper("Items: \(values.wrappedValue.int("items", default: 20))", value: values.int("items", default: 20), in: 1...50)
             LabeledSlider(label: "Height", value: values.cgFloat("height", default: 180), range: 80...320)
         },
         code: { values in
-            let stack = values.bool("vertical", default: true) ? "VStack" : "HStack"
+            let axis = ScrollAxisChoice.selection(values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
+            let stack = axis == .vertical ? "VStack" : "HStack"
             return """
-            ScrollView(\(values.bool("vertical", default: true) ? ".vertical" : ".horizontal")) {
+            ScrollView(.\(axis.code)) {
                 \(stack)(spacing: 8) {
                     ForEach(0..<\(values.int("items", default: 20)), id: \\.self) { index in
                         Text("Item \\(index)")
@@ -1249,7 +1391,7 @@ struct LivePreviewCanvas: View {
     let values: ExampleValues
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Label("Live Preview", systemImage: "play.fill")
                     .font(.headline)
@@ -1260,22 +1402,23 @@ struct LivePreviewCanvas: View {
             }
 
             ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.background)
+
                 CheckerboardBackground()
-                    .clipShape(.rect(cornerRadius: 10))
+                    .clipShape(.rect(cornerRadius: 12))
 
                 example.preview(values: values)
-                    .padding(20)
-                    .frame(maxWidth: .infinity, minHeight: 220)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, minHeight: 260)
                     .animation(.smooth(duration: 0.2), value: values)
             }
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 10).fill(.background)
-            )
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(.quaternary, lineWidth: 1)
             }
+            .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
 
             if !example.summary.isEmpty {
                 Text(example.summary)
@@ -1283,10 +1426,10 @@ struct LivePreviewCanvas: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+        .padding(20)
+        .background(.regularMaterial, in: .rect(cornerRadius: 14))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
     }
@@ -1313,7 +1456,6 @@ struct SymbolInspectorPanel: View {
     let symbol: IndexedSwiftSymbol
     let interactiveSymbol: InteractiveSymbol?
     @Binding var state: PlaygroundState
-    @Environment(\.colorScheme) private var colorScheme
     @State private var summaryGenerator = SymbolSummaryGenerator()
 
     private var selectedExample: SwiftUIExample? {
@@ -1329,6 +1471,9 @@ struct SymbolInspectorPanel: View {
             name: symbol.name,
             kind: symbol.kind.singularTitle,
             category: symbol.categoryName,
+            platform: symbol.platform,
+            sdkVersion: symbol.sdkVersion,
+            availability: formattedAvailability,
             declaration: symbol.declaration,
             defaultInstantiation: symbol.defaultInstantiation.strippingTokenize,
             exampleTitle: example?.title,
@@ -1344,39 +1489,17 @@ struct SymbolInspectorPanel: View {
             Section {
                 Label(symbol.name, systemImage: symbol.kind.systemImage)
                     .font(.headline)
-            }
-
-            if let interactiveSymbol, interactiveSymbol.examples.count > 1, let selectedExample {
-                Section("Example") {
-                    ExamplePicker(
-                        examples: interactiveSymbol.examples,
-                        selection: selectedExampleIDBinding(fallback: selectedExample.id)
-                    )
-                }
-            }
-
-            if let selectedExample {
-                Section("Controls") {
-                    selectedExample.controls(values: valuesBinding(for: selectedExample))
-                        .id(selectedExample.id)
-                }
-
-                Section {
-                    Button("Reset Example") {
-                        withAnimation {
-                            state.reset(selectedExample)
-                        }
-                    }
-                }
-
-                Section("Generated Code") {
-                    Text(SwiftSyntaxHighlighter.highlight(
-                        selectedExample.code(values: state.values(for: selectedExample)),
-                        colorScheme: colorScheme
-                    ))
+                Text(symbol.declaration)
                     .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                }
+            }
+
+            Section("Metadata") {
+                InspectorMetadataRow(title: "Kind", value: symbol.kind.singularTitle)
+                InspectorMetadataRow(title: "Category", value: symbol.categoryName)
+                InspectorMetadataRow(title: "Platform", value: symbol.platform.ifNotEmpty ?? "iOS")
+                InspectorMetadataRow(title: "Availability", value: formattedAvailability)
             }
 
             FoundationModelSummarySection(
@@ -1398,21 +1521,40 @@ struct SymbolInspectorPanel: View {
         }
     }
 
-    private func selectedExampleIDBinding(fallback: String) -> Binding<String> {
-        Binding(
-            get: { state.selectedExampleID ?? fallback },
-            set: { newValue in
-                guard let interactiveSymbol else { return }
-                state.selectExample(id: newValue, for: interactiveSymbol)
-            }
-        )
+    private var formattedAvailability: String {
+        guard !symbol.availability.isEmpty else {
+            let sdkVersion = symbol.sdkVersion.ifNotEmpty ?? "current"
+            return "\(symbol.platform.ifNotEmpty ?? "iOS") SDK \(sdkVersion)"
+        }
+
+        return symbol.availability
+            .split(separator: ",")
+            .map { platformName(for: String($0)) }
+            .joined(separator: ", ")
     }
 
-    private func valuesBinding(for example: SwiftUIExample) -> Binding<ExampleValues> {
-        Binding(
-            get: { state.values(for: example) },
-            set: { state.valuesByExampleID[example.id] = $0 }
-        )
+    private func platformName(for rawValue: String) -> String {
+        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "ios": "iOS"
+        case "macosx": "macOS"
+        case "tvos": "tvOS"
+        case "watchos": "watchOS"
+        case "xros": "visionOS"
+        default: rawValue
+        }
+    }
+}
+
+private struct InspectorMetadataRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        LabeledContent(title) {
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
     }
 }
 
@@ -1425,11 +1567,12 @@ private struct FoundationModelSummarySection: View {
     }
 
     var body: some View {
-        Section("Foundation Model") {
-            if !generator.summary.isEmpty {
-                Text(generator.summary)
-                    .font(.callout)
-                    .textSelection(.enabled)
+        Section("Summary") {
+            if let summary = generator.summary {
+                SummaryField(title: "What it is", value: summary.whatItIs)
+                SummaryField(title: "When to use", value: summary.whenToUse)
+                SummaryField(title: "Availability", value: summary.availability)
+                SummaryField(title: "Implementation note", value: summary.implementationNote)
             }
 
             if let message {
@@ -1457,7 +1600,24 @@ private struct FoundationModelSummarySection: View {
             return "Summarizing"
         }
 
-        return generator.summary.isEmpty ? "Summarize Usage" : "Regenerate Summary"
+        return generator.summary == nil ? "Generate Summary" : "Regenerate Summary"
+    }
+}
+
+private struct SummaryField: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -1548,7 +1708,45 @@ struct StackAlignmentPicker: View {
     }
 }
 
+struct ScrollAxisPicker: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        Picker("Direction", selection: $selection) {
+            ForEach(ScrollAxisChoice.allCases) { axis in
+                Text(axis.title).tag(axis.rawValue)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+}
+
 // MARK: - Supporting Types
+
+enum ScrollAxisChoice: Int, CaseIterable, Identifiable {
+    case vertical
+    case horizontal
+
+    var id: Int { rawValue }
+
+    static func selection(_ value: Int) -> ScrollAxisChoice {
+        ScrollAxisChoice(rawValue: value) ?? .vertical
+    }
+
+    var title: String {
+        switch self {
+        case .vertical: "Vertical"
+        case .horizontal: "Horizontal"
+        }
+    }
+
+    var code: String {
+        switch self {
+        case .vertical: "vertical"
+        case .horizontal: "horizontal"
+        }
+    }
+}
 
 enum ExampleColor: String, CaseIterable, Identifiable {
     case primary
@@ -1987,6 +2185,10 @@ enum ExampleFormat {
 }
 
 private extension String {
+    var ifNotEmpty: String? {
+        isEmpty ? nil : self
+    }
+
     func trimmingTrailingZeros() -> String {
         var value = self
         while value.contains(".") && value.last == "0" {

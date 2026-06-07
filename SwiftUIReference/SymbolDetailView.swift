@@ -1,7 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct SymbolDetailView: View {
     let symbol: IndexedSwiftSymbol?
+    @Environment(\.modelContext) private var modelContext
     @State private var showInspector = false
     @State private var playgroundState = PlaygroundState()
     @Environment(\.colorScheme) private var colorScheme
@@ -15,7 +17,7 @@ struct SymbolDetailView: View {
         Group {
             if let symbol {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 22) {
                         SymbolDetailHeader(symbol: symbol)
 
                         if let interactive = interactiveSymbol {
@@ -32,10 +34,12 @@ struct SymbolDetailView: View {
                         HighlightedCodeBlock(title: "Declaration", code: symbol.declaration)
                         MetadataSection(symbol: symbol)
                     }
-                    .padding(30)
+                    .padding(28)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .background(.primary.opacity(0.03))
+                .background {
+                    DetailCanvasBackground()
+                }
             } else {
                 ContentUnavailableView(
                     "Select a Symbol",
@@ -47,8 +51,18 @@ struct SymbolDetailView: View {
         }
         .navigationTitle(symbol?.name ?? "Details")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 if symbol != nil {
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Label(
+                            symbol?.isFavorite == true ? "Remove Favorite" : "Add Favorite",
+                            systemImage: symbol?.isFavorite == true ? "star.fill" : "star"
+                        )
+                    }
+                    .help(symbol?.isFavorite == true ? "Remove Favorite" : "Add Favorite")
+
                     Button {
                         withAnimation {
                             showInspector.toggle()
@@ -78,10 +92,16 @@ struct SymbolDetailView: View {
         }
     }
 
+    private func toggleFavorite() {
+        guard let symbol else { return }
+        symbol.isFavorite.toggle()
+        try? modelContext.save()
+    }
+
     /// Static example for non-interactive symbols
     private func staticExampleCode(for symbol: IndexedSwiftSymbol) -> String {
         let rawSnippet = symbol.defaultInstantiation.strippingTokenize
-        let snippet = rawSnippet.ifNotEmpty ?? symbol.declaration
+        let snippet = rawSnippet.ifNotEmpty ?? defaultExample(for: symbol)
         guard symbol.kind == .modifier else {
             return snippet
         }
@@ -91,6 +111,15 @@ struct SymbolDetailView: View {
         Text("Hello, SwiftUI")
             \(modifierCall)
         """
+    }
+
+    private func defaultExample(for symbol: IndexedSwiftSymbol) -> String {
+        switch symbol.kind {
+        case .view:
+            return "\(symbol.name)()"
+        case .modifier:
+            return ".\(symbol.name)()"
+        }
     }
 
     private func formattedModifierCall(from snippet: String) -> String {
@@ -124,16 +153,26 @@ private struct InteractiveExampleSection: View {
                     )
                 }
 
-                HighlightedCodeBlock(
-                    title: "\(selectedExample.title) Example",
-                    code: selectedExample.code(values: playgroundState.values(for: selectedExample))
-                )
-
                 LivePreviewCanvas(
                     example: selectedExample,
                     values: playgroundState.values(for: selectedExample)
                 )
                 .id(selectedExample.id)
+
+                InlineExampleControls(
+                    example: selectedExample,
+                    values: valuesBinding(for: selectedExample),
+                    resetAction: {
+                        withAnimation(.smooth) {
+                            playgroundState.reset(selectedExample)
+                        }
+                    }
+                )
+
+                HighlightedCodeBlock(
+                    title: "\(selectedExample.title) Code",
+                    code: selectedExample.code(values: playgroundState.values(for: selectedExample))
+                )
             }
             .onAppear {
                 playgroundState.prepare(for: symbol)
@@ -149,6 +188,44 @@ private struct InteractiveExampleSection: View {
             }
         )
     }
+
+    private func valuesBinding(for example: SwiftUIExample) -> Binding<ExampleValues> {
+        Binding(
+            get: { playgroundState.values(for: example) },
+            set: { playgroundState.valuesByExampleID[example.id] = $0 }
+        )
+    }
+}
+
+private struct InlineExampleControls: View {
+    let example: SwiftUIExample
+    @Binding var values: ExampleValues
+    let resetAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Controls", systemImage: "slider.horizontal.3")
+                    .font(.headline)
+
+                Spacer()
+
+                Button("Reset", systemImage: "arrow.counterclockwise", action: resetAction)
+                    .buttonStyle(.bordered)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                example.controls(values: $values)
+                    .id(example.id)
+            }
+        }
+        .padding(18)
+        .background(.regularMaterial, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
+    }
 }
 
 // MARK: - Header
@@ -157,24 +234,54 @@ private struct SymbolDetailHeader: View {
     let symbol: IndexedSwiftSymbol
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(symbol.name)
-                .font(.system(size: 30, weight: .bold))
-                .lineLimit(2)
-                .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: symbol.kind.systemImage)
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(symbol.kind.detailTint.gradient, in: .rect(cornerRadius: 14))
+                    .shadow(color: symbol.kind.detailTint.opacity(0.22), radius: 18, y: 10)
 
-            HStack(spacing: 8) {
-                DetailPill(
-                    title: symbol.kind.singularTitle,
-                    color: symbol.kind == .view ? .blue : .purple
-                )
-                DetailPill(title: symbol.categoryName, color: .secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        DetailPill(
+                            title: symbol.kind.singularTitle,
+                            color: symbol.kind.detailTint
+                        )
+                        DetailPill(title: symbol.categoryName, color: .secondary)
+
+                        if symbol.isFavorite {
+                            Label("Favorite", systemImage: "star.fill")
+                                .font(.caption.bold())
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+
+                    Text(symbol.name)
+                        .font(.largeTitle.bold())
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
             }
 
             Text(symbol.declaration)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: .rect(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.quaternary, lineWidth: 1)
+                }
+        }
+        .padding(22)
+        .background(.regularMaterial, in: .rect(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
         }
     }
 }
@@ -189,7 +296,34 @@ private struct DetailPill: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(color.opacity(0.72), in: .capsule)
+            .background(color.opacity(0.72), in: .rect(cornerRadius: 6))
+    }
+}
+
+private struct DetailCanvasBackground: View {
+    var body: some View {
+        ZStack {
+            Color.primary.opacity(0.035)
+            LinearGradient(
+                colors: [
+                    .teal.opacity(0.08),
+                    .clear,
+                    .orange.opacity(0.07)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private extension SwiftUISymbolKind {
+    var detailTint: Color {
+        switch self {
+        case .view: .teal
+        case .modifier: .orange
+        }
     }
 }
 
@@ -226,18 +360,20 @@ struct HighlightedCodeBlock: View {
                 .contentTransition(.symbolEffect(.replace))
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 Text(SwiftSyntaxHighlighter.highlight(code, colorScheme: colorScheme))
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
-                    .padding(.vertical, 4)
+                    .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollIndicators(.hidden)
+            .background(.black.opacity(colorScheme == .dark ? 0.28 : 0.05), in: .rect(cornerRadius: 8))
         }
         .padding(18)
-        .background(codeBackground, in: .rect(cornerRadius: 10))
+        .background(codeBackground, in: .rect(cornerRadius: 12))
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
     }

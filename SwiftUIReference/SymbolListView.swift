@@ -7,6 +7,7 @@ struct SymbolListView: View {
     @Binding var searchText: String
     @Binding var selectedKind: SwiftUISymbolKind?
     @Binding var selectedCategoryID: String?
+    @Binding var showsFavoritesOnly: Bool
     @Binding var selectedSymbol: IndexedSwiftSymbol?
 
     private var selectedSymbolID: String? {
@@ -26,6 +27,7 @@ struct SymbolListView: View {
                 searchText: $searchText,
                 selectedKind: $selectedKind,
                 selectedCategoryID: $selectedCategoryID,
+                showsFavoritesOnly: $showsFavoritesOnly,
                 resetAction: resetFilters
             )
 
@@ -33,9 +35,9 @@ struct SymbolListView: View {
 
             if symbols.isEmpty {
                 ContentUnavailableView(
-                    "No Symbols",
-                    systemImage: "shippingbox",
-                    description: Text("Try a different search or category.")
+                    showsFavoritesOnly ? "No Favorites" : "No Symbols",
+                    systemImage: showsFavoritesOnly ? "star" : "shippingbox",
+                    description: Text(showsFavoritesOnly ? "Star symbols from the detail view to build this list." : "Try a different search or category.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -55,10 +57,9 @@ struct SymbolListView: View {
                                 .id(symbol.stableID)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(14)
                     }
-                    .background(.primary.opacity(0.03))
+                    .background(.quaternary.opacity(0.32))
                     .onAppear {
                         ensureSelection()
                     }
@@ -81,30 +82,7 @@ struct SymbolListView: View {
                     .background(.ultraThinMaterial)
             }
         }
-        .navigationTitle("SwiftUI Indexer")
-    }
-
-    private var categorySelection: Binding<String> {
-        Binding {
-            if let selectedKind, let selectedCategoryID {
-                return "\(selectedKind.rawValue):\(selectedCategoryID)"
-            }
-
-            return "all"
-        } set: { value in
-            guard value != "all" else {
-                selectedCategoryID = nil
-                return
-            }
-
-            guard let summary = categorySummaries.first(where: { $0.id == value }) else {
-                selectedCategoryID = nil
-                return
-            }
-
-            selectedKind = summary.kind
-            selectedCategoryID = summary.categoryID
-        }
+        .navigationTitle("Library")
     }
 
     private var selectionSummary: String {
@@ -122,6 +100,7 @@ struct SymbolListView: View {
         searchText = ""
         selectedKind = nil
         selectedCategoryID = nil
+        showsFavoritesOnly = false
     }
 
     private func ensureSelection() {
@@ -145,6 +124,7 @@ private struct BrowserHeaderView: View {
     @Binding var searchText: String
     @Binding var selectedKind: SwiftUISymbolKind?
     @Binding var selectedCategoryID: String?
+    @Binding var showsFavoritesOnly: Bool
     let resetAction: () -> Void
 
     private var categorySelection: Binding<String> {
@@ -156,6 +136,7 @@ private struct BrowserHeaderView: View {
             return "all"
         } set: { value in
             guard value != "all" else {
+                showsFavoritesOnly = false
                 selectedCategoryID = nil
                 return
             }
@@ -165,13 +146,22 @@ private struct BrowserHeaderView: View {
                 return
             }
 
+            showsFavoritesOnly = false
             selectedKind = summary.kind
             selectedCategoryID = summary.categoryID
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headerTitle)
+                    .font(.title2.bold())
+                Text(headerSubtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 12) {
                 SearchField(text: $searchText)
 
@@ -185,23 +175,71 @@ private struct BrowserHeaderView: View {
                 .pickerStyle(.menu)
                 .frame(width: 210)
 
-                Button(action: resetAction) {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .frame(width: 18, height: 18)
-                }
+                Button("Reset Filters", systemImage: "line.3.horizontal.decrease", action: resetAction)
+                    .labelStyle(.iconOnly)
                 .buttonStyle(.bordered)
                 .help("Reset Filters")
             }
 
-            Text("\(symbolsCount.formatted()) symbols")
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.secondary)
-                .contentTransition(.numericText())
+            HStack(spacing: 8) {
+                BrowserMetricChip(title: "Showing", value: symbolsCount.formatted(), systemImage: "line.3.horizontal")
+                BrowserMetricChip(title: "Indexed", value: totalSymbolCount.formatted(), systemImage: "archivebox")
+                if showsFavoritesOnly {
+                    BrowserMetricChip(title: "Scope", value: "Favorites", systemImage: "star.fill", tint: .yellow)
+                }
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
-        .background(.regularMaterial)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
+        .background(.bar)
+    }
+
+    private var headerTitle: String {
+        if showsFavoritesOnly {
+            return "Favorites"
+        }
+
+        if let selectedKind {
+            return selectedKind.title
+        }
+
+        return "SwiftUI Library"
+    }
+
+    private var headerSubtitle: String {
+        if let selectedCategoryID,
+           let summary = categorySummaries.first(where: { $0.categoryID == selectedCategoryID }) {
+            return "\(summary.title) symbols from the iOS SwiftUI SDK."
+        }
+
+        return "Browse indexed views and modifiers with live examples."
+    }
+}
+
+private struct BrowserMetricChip: View {
+    let title: String
+    let value: String
+    let systemImage: String
+    var tint: Color = .secondary
+
+    var body: some View {
+        Label {
+            HStack(spacing: 4) {
+                Text(title)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .bold()
+                    .monospacedDigit()
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(tint)
+        }
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.thinMaterial, in: .rect(cornerRadius: 7))
     }
 }
 
@@ -218,18 +256,16 @@ private struct SearchField: View {
                 .textFieldStyle(.plain)
 
             if !text.isEmpty {
-                Button {
+                Button("Clear Search", systemImage: "xmark.circle.fill") {
                     text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
                 }
+                .labelStyle(.iconOnly)
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.thinMaterial, in: .rect(cornerRadius: 8))
+        .background(.background, in: .rect(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(.quaternary, lineWidth: 1)
@@ -260,19 +296,32 @@ struct SymbolRow: View {
 
             Text(symbol.kind.singularTitle)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(isSelected ? .white : symbol.kind.tint)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.thinMaterial, in: .capsule)
+                .background(symbol.kind.tint.opacity(isSelected ? 0.18 : 0.12), in: .rect(cornerRadius: 6))
+
+            if symbol.isFavorite {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(isSelected ? .white : .yellow)
+                    .accessibilityLabel("Favorite")
+            }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(.blue.gradient.opacity(0.72))
+                    .fill(Color.accentColor.gradient.opacity(0.86))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.background.opacity(0.72))
             }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 1)
         }
         .contentShape(.rect)
     }
@@ -284,7 +333,7 @@ struct SymbolIcon: View {
 
     var body: some View {
         Image(systemName: iconName)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.body.bold())
             .foregroundStyle(.white)
             .frame(width: 34, height: 34)
             .background(backgroundGradient, in: .rect(cornerRadius: 8))
@@ -305,9 +354,18 @@ struct SymbolIcon: View {
 
     private var backgroundGradient: LinearGradient {
         let colors: [Color] = kind == .view
-        ? [.blue, .cyan.opacity(0.8)]
-        : [.purple, .pink.opacity(0.75)]
+        ? [.teal, .mint.opacity(0.86)]
+        : [.orange, .pink.opacity(0.78)]
 
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+}
+
+private extension SwiftUISymbolKind {
+    var tint: Color {
+        switch self {
+        case .view: .teal
+        case .modifier: .orange
+        }
     }
 }

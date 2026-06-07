@@ -6,6 +6,9 @@ struct SymbolSummaryContext: Equatable, Sendable {
     let name: String
     let kind: String
     let category: String
+    let platform: String
+    let sdkVersion: String
+    let availability: String
     let declaration: String
     let defaultInstantiation: String
     let exampleTitle: String?
@@ -13,10 +16,25 @@ struct SymbolSummaryContext: Equatable, Sendable {
     let exampleCode: String?
 }
 
+@Generable
+struct SymbolGeneratedSummary: Sendable {
+    @Guide(description: "One short sentence explaining what this SwiftUI symbol is")
+    let whatItIs: String
+
+    @Guide(description: "One short sentence explaining when a developer should use this symbol")
+    let whenToUse: String
+
+    @Guide(description: "A concise availability summary using only the provided platform and SDK metadata")
+    let availability: String
+
+    @Guide(description: "One practical note about usage, composition, or common setup")
+    let implementationNote: String
+}
+
 @MainActor
 @Observable
 final class SymbolSummaryGenerator {
-    var summary = ""
+    var summary: SymbolGeneratedSummary?
     var statusMessage: String?
     var isStreaming = false
 
@@ -38,14 +56,14 @@ final class SymbolSummaryGenerator {
         responseTask?.cancel()
         responseTask = nil
         activeRequestID = nil
-        summary = ""
+        summary = nil
         statusMessage = nil
         isStreaming = false
     }
 
     func generateSummary(for context: SymbolSummaryContext) {
         responseTask?.cancel()
-        summary = ""
+        summary = nil
         statusMessage = nil
 
         if let unavailableMessage {
@@ -64,19 +82,17 @@ final class SymbolSummaryGenerator {
                     model: model,
                     instructions: Self.instructions
                 )
-                let stream = session.streamResponse(
+                let response = try await session.respond(
                     to: Self.prompt(for: context),
+                    generating: SymbolGeneratedSummary.self,
                     options: GenerationOptions(
                         sampling: .greedy,
-                        maximumResponseTokens: 140
+                        maximumResponseTokens: 220
                     )
                 )
 
-                for try await snapshot in stream {
-                    try Task.checkCancellation()
-                    updateSummary(Self.oneParagraph(snapshot.content), requestID: requestID)
-                }
-
+                try Task.checkCancellation()
+                updateSummary(response.content, requestID: requestID)
                 finish(requestID: requestID)
             } catch is CancellationError {
                 finish(requestID: requestID, cancelled: true)
@@ -89,7 +105,7 @@ final class SymbolSummaryGenerator {
         }
     }
 
-    private func updateSummary(_ newSummary: String, requestID: UUID) {
+    private func updateSummary(_ newSummary: SymbolGeneratedSummary, requestID: UUID) {
         guard activeRequestID == requestID else { return }
         summary = newSummary
     }
@@ -106,7 +122,7 @@ final class SymbolSummaryGenerator {
             return
         }
 
-        if summary.isEmpty {
+        if summary == nil {
             statusMessage = message ?? "The model did not return a summary."
         } else {
             statusMessage = message
@@ -117,9 +133,9 @@ final class SymbolSummaryGenerator {
 
     private static let instructions = """
     You explain SwiftUI APIs inside a reference app. Use only the provided \
-    symbol metadata and example context. Return exactly one concise paragraph \
-    of two to four sentences. Do not use Markdown, headings, bullet points, \
-    or code blocks.
+    symbol metadata and example context. Keep every generated field concise, \
+    factual, and specific. Do not invent platform availability or version \
+    information.
     """
 
     private static func prompt(for context: SymbolSummaryContext) -> String {
@@ -128,6 +144,9 @@ final class SymbolSummaryGenerator {
             "Name: \(context.name)",
             "Kind: \(context.kind)",
             "Category: \(context.category)",
+            "Platform: \(context.platform)",
+            "SDK version: \(context.sdkVersion)",
+            "Availability metadata: \(context.availability)",
             "Declaration: \(context.declaration.limitedForPrompt)"
         ]
 
@@ -148,14 +167,6 @@ final class SymbolSummaryGenerator {
         }
 
         return lines.joined(separator: "\n")
-    }
-
-    private static func oneParagraph(_ value: String) -> String {
-        value
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
     }
 
     private static func unavailableMessage(

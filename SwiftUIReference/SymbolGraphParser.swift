@@ -55,7 +55,8 @@ struct SymbolGraphParser {
                     id: symbol.identifier.precise,
                     name: symbol.names.title,
                     kind: .view,
-                    declaration: symbol.declaration
+                    declaration: symbol.declaration,
+                    availability: symbol.availabilitySummary
                 )
             }
 
@@ -68,7 +69,8 @@ struct SymbolGraphParser {
                     id: symbol.identifier.precise,
                     name: symbol.names.title,
                     kind: .modifier,
-                    declaration: symbol.declaration
+                    declaration: symbol.declaration,
+                    availability: symbol.availabilitySummary
                 )
             }
 
@@ -94,6 +96,9 @@ struct SymbolGraphParser {
                 item.defaultInstantiation.ifNotEmpty ??
                 item.name
 
+                let availability = graphSymbolsByID[item.id]?.availabilitySummary.ifNotEmpty ??
+                item.availability
+
                 return ExtractedSwiftSymbol(
                     id: item.id,
                     name: item.name,
@@ -104,7 +109,7 @@ struct SymbolGraphParser {
                     categoryID: item.categoryID,
                     categoryName: item.categoryName,
                     categoryOrdinal: item.categoryOrdinal,
-                    availability: item.availability
+                    availability: availability
                 )
             }
             .sorted {
