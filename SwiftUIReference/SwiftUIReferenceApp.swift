@@ -23,7 +23,8 @@ struct SwiftUIReferenceApp: App {
     static let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             IndexedSwiftSymbol.self,
-            IndexRun.self
+            IndexRun.self,
+            ManualSymbolExample.self
         ])
 
         let configuration = ModelConfiguration(schema: schema,

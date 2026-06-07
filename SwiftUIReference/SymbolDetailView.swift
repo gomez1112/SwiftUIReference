@@ -4,13 +4,20 @@ import SwiftUI
 struct SymbolDetailView: View {
     let symbol: IndexedSwiftSymbol?
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ManualSymbolExample.createdAt) private var manualExamples: [ManualSymbolExample]
     @State private var showInspector = false
+    @State private var showAddExample = false
     @State private var playgroundState = PlaygroundState()
     @Environment(\.colorScheme) private var colorScheme
 
     private var interactiveSymbol: InteractiveSymbol? {
         guard let symbol else { return nil }
         return InteractiveSymbol.match(for: symbol)
+    }
+
+    private var symbolManualExamples: [ManualSymbolExample] {
+        guard let symbol else { return [] }
+        return manualExamples.filter { $0.symbolStableID == symbol.stableID }
     }
 
     var body: some View {
@@ -28,6 +35,11 @@ struct SymbolDetailView: View {
                         } else {
                             HighlightedCodeBlock(title: "Example", code: staticExampleCode(for: symbol))
                         }
+
+                        ManualExamplesSection(
+                            examples: symbolManualExamples,
+                            deleteAction: deleteManualExample
+                        )
 
                         RelationshipsSection(symbol: symbol)
                         AvailabilitySection(symbol: symbol)
@@ -54,6 +66,13 @@ struct SymbolDetailView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 if symbol != nil {
                     Button {
+                        showAddExample = true
+                    } label: {
+                        Label("Add Example", systemImage: "plus")
+                    }
+                    .help("Add Manual Example")
+
+                    Button {
                         toggleFavorite()
                     } label: {
                         Label(
@@ -72,6 +91,11 @@ struct SymbolDetailView: View {
                     }
                     .help("Toggle Inspector")
                 }
+            }
+        }
+        .sheet(isPresented: $showAddExample) {
+            if let symbol {
+                AddManualExampleSheet(symbol: symbol)
             }
         }
         .inspector(isPresented: $showInspector) {
@@ -95,6 +119,11 @@ struct SymbolDetailView: View {
     private func toggleFavorite() {
         guard let symbol else { return }
         symbol.isFavorite.toggle()
+        try? modelContext.save()
+    }
+
+    private func deleteManualExample(_ example: ManualSymbolExample) {
+        modelContext.delete(example)
         try? modelContext.save()
     }
 
@@ -194,6 +223,143 @@ private struct InteractiveExampleSection: View {
             get: { playgroundState.values(for: example) },
             set: { playgroundState.valuesByExampleID[example.id] = $0 }
         )
+    }
+}
+
+private struct ManualExamplesSection: View {
+    let examples: [ManualSymbolExample]
+    let deleteAction: (ManualSymbolExample) -> Void
+
+    var body: some View {
+        if !examples.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Label("Manual Examples", systemImage: "square.and.pencil")
+                    .font(.headline)
+
+                ForEach(examples) { example in
+                    ManualExampleCard(
+                        example: example,
+                        deleteAction: { deleteAction(example) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct ManualExampleCard: View {
+    let example: ManualSymbolExample
+    let deleteAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(example.title)
+                        .font(.headline)
+                    if !example.summary.isEmpty {
+                        Text(example.summary)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button("Delete Example", systemImage: "trash", action: deleteAction)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+            }
+
+            HighlightedCodeBlock(title: "Code", code: example.code)
+        }
+        .padding(18)
+        .background(.regularMaterial, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
+    }
+}
+
+private struct AddManualExampleSheet: View {
+    let symbol: IndexedSwiftSymbol
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var title = ""
+    @State private var summary = ""
+    @State private var code = ""
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Example") {
+                    TextField("Title", text: $title)
+                    TextField("Summary", text: $summary, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+
+                Section("Code") {
+                    TextEditor(text: $code)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 180)
+                }
+            }
+            .navigationTitle("Add Example")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                if title.isEmpty {
+                    title = "\(symbol.name) Example"
+                }
+                if code.isEmpty {
+                    code = defaultCode
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 520, minHeight: 460)
+        #endif
+    }
+
+    private var defaultCode: String {
+        switch symbol.kind {
+        case .view:
+            "\(symbol.name)()"
+        case .modifier:
+            """
+            Text("Hello, SwiftUI")
+                .\(symbol.name)()
+            """
+        }
+    }
+
+    private func save() {
+        let example = ManualSymbolExample(
+            symbolStableID: symbol.stableID,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            summary: summary.trimmingCharacters(in: .whitespacesAndNewlines),
+            code: code.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        modelContext.insert(example)
+        try? modelContext.save()
+        dismiss()
     }
 }
 

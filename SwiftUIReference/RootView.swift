@@ -136,5 +136,5 @@ struct RootView: View {
 
 #Preview {
     RootView()
-        .modelContainer(for: [IndexedSwiftSymbol.self, IndexRun.self], inMemory: true)
+        .modelContainer(for: [IndexedSwiftSymbol.self, IndexRun.self, ManualSymbolExample.self], inMemory: true)
 }
