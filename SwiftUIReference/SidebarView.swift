@@ -5,9 +5,11 @@ struct SidebarView: View {
     let totalCount: Int
     let viewCount: Int
     let modifierCount: Int
+    let favoriteCount: Int
     let latestRun: IndexRun?
     @Binding var selectedKind: SwiftUISymbolKind?
     @Binding var selectedCategoryID: String?
+    @Binding var showsFavoritesOnly: Bool
 
     var body: some View {
         List {
@@ -16,8 +18,20 @@ struct SidebarView: View {
                     title: "All Symbols",
                     systemImage: "square.grid.2x2",
                     count: totalCount,
-                    isSelected: selectedKind == nil && selectedCategoryID == nil
+                    isSelected: selectedKind == nil && selectedCategoryID == nil && !showsFavoritesOnly
                 ) {
+                    showsFavoritesOnly = false
+                    selectedKind = nil
+                    selectedCategoryID = nil
+                }
+
+                SidebarFilterRow(
+                    title: "Favorites",
+                    systemImage: "star.fill",
+                    count: favoriteCount,
+                    isSelected: showsFavoritesOnly
+                ) {
+                    showsFavoritesOnly = true
                     selectedKind = nil
                     selectedCategoryID = nil
                 }
@@ -26,8 +40,9 @@ struct SidebarView: View {
                     title: "Views",
                     systemImage: SwiftUISymbolKind.view.systemImage,
                     count: viewCount,
-                    isSelected: selectedKind == .view && selectedCategoryID == nil
+                    isSelected: selectedKind == .view && selectedCategoryID == nil && !showsFavoritesOnly
                 ) {
+                    showsFavoritesOnly = false
                     selectedKind = .view
                     selectedCategoryID = nil
                 }
@@ -36,8 +51,9 @@ struct SidebarView: View {
                     title: "Modifiers",
                     systemImage: SwiftUISymbolKind.modifier.systemImage,
                     count: modifierCount,
-                    isSelected: selectedKind == .modifier && selectedCategoryID == nil
+                    isSelected: selectedKind == .modifier && selectedCategoryID == nil && !showsFavoritesOnly
                 ) {
+                    showsFavoritesOnly = false
                     selectedKind = .modifier
                     selectedCategoryID = nil
                 }
@@ -88,7 +104,7 @@ private struct SidebarFilterRow: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(.blue.gradient.opacity(0.72))
+                        .fill(Color.accentColor.gradient.opacity(0.82))
                 }
             }
             .contentShape(.rect)

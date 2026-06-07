@@ -1,7 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct SymbolDetailView: View {
     let symbol: IndexedSwiftSymbol?
+    @Environment(\.modelContext) private var modelContext
     @State private var showInspector = false
     @State private var playgroundState = PlaygroundState()
     @Environment(\.colorScheme) private var colorScheme
@@ -47,8 +49,18 @@ struct SymbolDetailView: View {
         }
         .navigationTitle(symbol?.name ?? "Details")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
                 if symbol != nil {
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Label(
+                            symbol?.isFavorite == true ? "Remove Favorite" : "Add Favorite",
+                            systemImage: symbol?.isFavorite == true ? "star.fill" : "star"
+                        )
+                    }
+                    .help(symbol?.isFavorite == true ? "Remove Favorite" : "Add Favorite")
+
                     Button {
                         withAnimation {
                             showInspector.toggle()
@@ -76,6 +88,12 @@ struct SymbolDetailView: View {
             }
             showInspector = false
         }
+    }
+
+    private func toggleFavorite() {
+        guard let symbol else { return }
+        symbol.isFavorite.toggle()
+        try? modelContext.save()
     }
 
     /// Static example for non-interactive symbols
@@ -124,16 +142,26 @@ private struct InteractiveExampleSection: View {
                     )
                 }
 
-                HighlightedCodeBlock(
-                    title: "\(selectedExample.title) Example",
-                    code: selectedExample.code(values: playgroundState.values(for: selectedExample))
-                )
-
                 LivePreviewCanvas(
                     example: selectedExample,
                     values: playgroundState.values(for: selectedExample)
                 )
                 .id(selectedExample.id)
+
+                InlineExampleControls(
+                    example: selectedExample,
+                    values: valuesBinding(for: selectedExample),
+                    resetAction: {
+                        withAnimation(.smooth) {
+                            playgroundState.reset(selectedExample)
+                        }
+                    }
+                )
+
+                HighlightedCodeBlock(
+                    title: "\(selectedExample.title) Code",
+                    code: selectedExample.code(values: playgroundState.values(for: selectedExample))
+                )
             }
             .onAppear {
                 playgroundState.prepare(for: symbol)
@@ -148,6 +176,44 @@ private struct InteractiveExampleSection: View {
                 playgroundState.selectExample(id: newValue, for: symbol)
             }
         )
+    }
+
+    private func valuesBinding(for example: SwiftUIExample) -> Binding<ExampleValues> {
+        Binding(
+            get: { playgroundState.values(for: example) },
+            set: { playgroundState.valuesByExampleID[example.id] = $0 }
+        )
+    }
+}
+
+private struct InlineExampleControls: View {
+    let example: SwiftUIExample
+    @Binding var values: ExampleValues
+    let resetAction: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Controls", systemImage: "slider.horizontal.3")
+                    .font(.headline)
+
+                Spacer()
+
+                Button("Reset", systemImage: "arrow.counterclockwise", action: resetAction)
+                    .buttonStyle(.bordered)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                example.controls(values: $values)
+                    .id(example.id)
+            }
+        }
+        .padding(18)
+        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(.quaternary, lineWidth: 1)
+        }
     }
 }
 

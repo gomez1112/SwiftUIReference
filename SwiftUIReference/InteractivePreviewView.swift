@@ -946,10 +946,14 @@ private extension SwiftUIExampleCatalog {
         title: "Scrollable Items",
         summary: "Switches between vertical and horizontal scrolling.",
         match: SymbolExampleMatch(kind: .view, names: ["ScrollView"]),
-        defaultValues: ExampleValues(doubles: ["height": 180], ints: ["items": 20], bools: ["vertical": true]),
+        defaultValues: ExampleValues(
+            doubles: ["height": 180],
+            ints: ["items": 20, "axis": ScrollAxisChoice.vertical.rawValue]
+        ),
         preview: { values in
+            let axis = ScrollAxisChoice.selection(values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
             Group {
-                if values.bool("vertical", default: true) {
+                if axis == .vertical {
                     ScrollView(.vertical) {
                         VStack(spacing: 8) {
                             ForEach(0..<values.int("items", default: 20), id: \.self) { index in
@@ -979,14 +983,15 @@ private extension SwiftUIExampleCatalog {
             .frame(maxWidth: 300)
         },
         controls: { values in
-            Toggle("Vertical Axis", isOn: values.bool("vertical", default: true))
+            ScrollAxisPicker(selection: values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
             Stepper("Items: \(values.wrappedValue.int("items", default: 20))", value: values.int("items", default: 20), in: 1...50)
             LabeledSlider(label: "Height", value: values.cgFloat("height", default: 180), range: 80...320)
         },
         code: { values in
-            let stack = values.bool("vertical", default: true) ? "VStack" : "HStack"
+            let axis = ScrollAxisChoice.selection(values.int("axis", default: ScrollAxisChoice.vertical.rawValue))
+            let stack = axis == .vertical ? "VStack" : "HStack"
             return """
-            ScrollView(\(values.bool("vertical", default: true) ? ".vertical" : ".horizontal")) {
+            ScrollView(.\(axis.code)) {
                 \(stack)(spacing: 8) {
                     ForEach(0..<\(values.int("items", default: 20)), id: \\.self) { index in
                         Text("Item \\(index)")
@@ -1548,7 +1553,45 @@ struct StackAlignmentPicker: View {
     }
 }
 
+struct ScrollAxisPicker: View {
+    @Binding var selection: Int
+
+    var body: some View {
+        Picker("Direction", selection: $selection) {
+            ForEach(ScrollAxisChoice.allCases) { axis in
+                Text(axis.title).tag(axis.rawValue)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+}
+
 // MARK: - Supporting Types
+
+enum ScrollAxisChoice: Int, CaseIterable, Identifiable {
+    case vertical
+    case horizontal
+
+    var id: Int { rawValue }
+
+    static func selection(_ value: Int) -> ScrollAxisChoice {
+        ScrollAxisChoice(rawValue: value) ?? .vertical
+    }
+
+    var title: String {
+        switch self {
+        case .vertical: "Vertical"
+        case .horizontal: "Horizontal"
+        }
+    }
+
+    var code: String {
+        switch self {
+        case .vertical: "vertical"
+        case .horizontal: "horizontal"
+        }
+    }
+}
 
 enum ExampleColor: String, CaseIterable, Identifiable {
     case primary

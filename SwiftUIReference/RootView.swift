@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var selectedKind: SwiftUISymbolKind?
     @State private var selectedCategoryID: String?
     @State private var selectedSymbol: IndexedSwiftSymbol?
+    @State private var showsFavoritesOnly = false
 
     private var viewCount: Int {
         symbols.filter { $0.kind == .view }.count
@@ -20,17 +21,22 @@ struct RootView: View {
         symbols.filter { $0.kind == .modifier }.count
     }
 
+    private var favoriteCount: Int {
+        symbols.filter(\.isFavorite).count
+    }
+
     private var filteredSymbols: [IndexedSwiftSymbol] {
         symbols.filter { symbol in
             let matchesKind = selectedKind == nil || symbol.kind == selectedKind
             let matchesCategory = selectedCategoryID == nil || symbol.categoryID == selectedCategoryID
+            let matchesFavorite = !showsFavoritesOnly || symbol.isFavorite
             let matchesSearch = searchText.isEmpty ||
             symbol.name.localizedStandardContains(searchText) ||
             symbol.libraryTitle.localizedStandardContains(searchText) ||
             symbol.categoryName.localizedStandardContains(searchText) ||
             symbol.declaration.localizedStandardContains(searchText) ||
             symbol.defaultInstantiation.localizedStandardContains(searchText)
-            return matchesKind && matchesCategory && matchesSearch
+            return matchesKind && matchesCategory && matchesFavorite && matchesSearch
         }
     }
 
@@ -68,9 +74,11 @@ struct RootView: View {
                 totalCount: symbols.count,
                 viewCount: viewCount,
                 modifierCount: modifierCount,
+                favoriteCount: favoriteCount,
                 latestRun: indexRuns.first,
                 selectedKind: $selectedKind,
-                selectedCategoryID: $selectedCategoryID
+                selectedCategoryID: $selectedCategoryID,
+                showsFavoritesOnly: $showsFavoritesOnly
             )
             .navigationSplitViewColumnWidth(min: 250, ideal: 290, max: 330)
         } content: {
@@ -81,6 +89,7 @@ struct RootView: View {
                 searchText: $searchText,
                 selectedKind: $selectedKind,
                 selectedCategoryID: $selectedCategoryID,
+                showsFavoritesOnly: $showsFavoritesOnly,
                 selectedSymbol: $selectedSymbol
             )
             .navigationSplitViewColumnWidth(min: 460, ideal: 520, max: 620)
@@ -121,7 +130,7 @@ struct RootView: View {
     }
 
     private var exportSummaryText: String {
-        "SwiftUI Indexer: \(symbols.count) symbols, \(viewCount) views, \(modifierCount) modifiers."
+        "SwiftUI Indexer: \(symbols.count) symbols, \(viewCount) views, \(modifierCount) modifiers, \(favoriteCount) favorites."
     }
 }
 

@@ -7,6 +7,7 @@ struct SymbolListView: View {
     @Binding var searchText: String
     @Binding var selectedKind: SwiftUISymbolKind?
     @Binding var selectedCategoryID: String?
+    @Binding var showsFavoritesOnly: Bool
     @Binding var selectedSymbol: IndexedSwiftSymbol?
 
     private var selectedSymbolID: String? {
@@ -26,6 +27,7 @@ struct SymbolListView: View {
                 searchText: $searchText,
                 selectedKind: $selectedKind,
                 selectedCategoryID: $selectedCategoryID,
+                showsFavoritesOnly: $showsFavoritesOnly,
                 resetAction: resetFilters
             )
 
@@ -35,7 +37,7 @@ struct SymbolListView: View {
                 ContentUnavailableView(
                     "No Symbols",
                     systemImage: "shippingbox",
-                    description: Text("Try a different search or category.")
+                    description: Text(showsFavoritesOnly ? "Star symbols from the detail view to build this list." : "Try a different search or category.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -122,6 +124,7 @@ struct SymbolListView: View {
         searchText = ""
         selectedKind = nil
         selectedCategoryID = nil
+        showsFavoritesOnly = false
     }
 
     private func ensureSelection() {
@@ -145,6 +148,7 @@ private struct BrowserHeaderView: View {
     @Binding var searchText: String
     @Binding var selectedKind: SwiftUISymbolKind?
     @Binding var selectedCategoryID: String?
+    @Binding var showsFavoritesOnly: Bool
     let resetAction: () -> Void
 
     private var categorySelection: Binding<String> {
@@ -156,6 +160,7 @@ private struct BrowserHeaderView: View {
             return "all"
         } set: { value in
             guard value != "all" else {
+                showsFavoritesOnly = false
                 selectedCategoryID = nil
                 return
             }
@@ -165,6 +170,7 @@ private struct BrowserHeaderView: View {
                 return
             }
 
+            showsFavoritesOnly = false
             selectedKind = summary.kind
             selectedCategoryID = summary.categoryID
         }
@@ -197,6 +203,12 @@ private struct BrowserHeaderView: View {
                 .font(.callout.weight(.medium))
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText())
+
+            if showsFavoritesOnly {
+                Label("Favorites", systemImage: "star.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.yellow)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)
@@ -264,6 +276,12 @@ struct SymbolRow: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.thinMaterial, in: .capsule)
+
+            if symbol.isFavorite {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(isSelected ? .white : .yellow)
+                    .accessibilityLabel("Favorite")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

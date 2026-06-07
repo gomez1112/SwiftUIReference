@@ -58,6 +58,7 @@ final class IndexedSwiftSymbol {
     var platform: String = "iOS"
     var sdkVersion: String = ""
     var lastIndexedAt: Date = Date()
+    var isFavorite: Bool = false
 
     init(
         stableID: String,
@@ -73,7 +74,8 @@ final class IndexedSwiftSymbol {
         moduleName: String = "SwiftUI",
         platform: String = "iOS",
         sdkVersion: String,
-        lastIndexedAt: Date = .now
+        lastIndexedAt: Date = .now,
+        isFavorite: Bool = false
     ) {
         self.stableID = stableID
         self.name = name
@@ -89,6 +91,7 @@ final class IndexedSwiftSymbol {
         self.platform = platform
         self.sdkVersion = sdkVersion
         self.lastIndexedAt = lastIndexedAt
+        self.isFavorite = isFavorite
     }
 
     var kind: SwiftUISymbolKind {
