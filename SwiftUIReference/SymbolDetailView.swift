@@ -114,11 +114,12 @@ struct SymbolDetailView: View {
     }
 
     private func defaultExample(for symbol: IndexedSwiftSymbol) -> String {
-        guard symbol.kind == .view else {
-            return symbol.declaration
+        switch symbol.kind {
+        case .view:
+            return "\(symbol.name)()"
+        case .modifier:
+            return ".\(symbol.name)()"
         }
-
-        return "\(symbol.name)()"
     }
 
     private func formattedModifierCall(from snippet: String) -> String {
