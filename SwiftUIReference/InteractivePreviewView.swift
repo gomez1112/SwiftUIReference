@@ -1254,7 +1254,7 @@ struct LivePreviewCanvas: View {
     let values: ExampleValues
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Label("Live Preview", systemImage: "play.fill")
                     .font(.headline)
@@ -1265,22 +1265,23 @@ struct LivePreviewCanvas: View {
             }
 
             ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.background)
+
                 CheckerboardBackground()
-                    .clipShape(.rect(cornerRadius: 10))
+                    .clipShape(.rect(cornerRadius: 12))
 
                 example.preview(values: values)
-                    .padding(20)
-                    .frame(maxWidth: .infinity, minHeight: 220)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, minHeight: 260)
                     .animation(.smooth(duration: 0.2), value: values)
             }
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 10).fill(.background)
-            )
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .strokeBorder(.quaternary, lineWidth: 1)
             }
+            .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
 
             if !example.summary.isEmpty {
                 Text(example.summary)
@@ -1288,10 +1289,10 @@ struct LivePreviewCanvas: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+        .padding(20)
+        .background(.regularMaterial, in: .rect(cornerRadius: 14))
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
     }

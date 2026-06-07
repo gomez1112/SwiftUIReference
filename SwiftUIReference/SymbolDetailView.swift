@@ -17,7 +17,7 @@ struct SymbolDetailView: View {
         Group {
             if let symbol {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 22) {
                         SymbolDetailHeader(symbol: symbol)
 
                         if let interactive = interactiveSymbol {
@@ -34,10 +34,12 @@ struct SymbolDetailView: View {
                         HighlightedCodeBlock(title: "Declaration", code: symbol.declaration)
                         MetadataSection(symbol: symbol)
                     }
-                    .padding(30)
+                    .padding(28)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .background(.primary.opacity(0.03))
+                .background {
+                    DetailCanvasBackground()
+                }
             } else {
                 ContentUnavailableView(
                     "Select a Symbol",
@@ -209,7 +211,7 @@ private struct InlineExampleControls: View {
             }
         }
         .padding(18)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+        .background(.regularMaterial, in: .rect(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(.quaternary, lineWidth: 1)
@@ -223,24 +225,54 @@ private struct SymbolDetailHeader: View {
     let symbol: IndexedSwiftSymbol
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(symbol.name)
-                .font(.system(size: 30, weight: .bold))
-                .lineLimit(2)
-                .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 16) {
+                Image(systemName: symbol.kind.systemImage)
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                    .background(symbol.kind.detailTint.gradient, in: .rect(cornerRadius: 14))
+                    .shadow(color: symbol.kind.detailTint.opacity(0.22), radius: 18, y: 10)
 
-            HStack(spacing: 8) {
-                DetailPill(
-                    title: symbol.kind.singularTitle,
-                    color: symbol.kind == .view ? .blue : .purple
-                )
-                DetailPill(title: symbol.categoryName, color: .secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        DetailPill(
+                            title: symbol.kind.singularTitle,
+                            color: symbol.kind.detailTint
+                        )
+                        DetailPill(title: symbol.categoryName, color: .secondary)
+
+                        if symbol.isFavorite {
+                            Label("Favorite", systemImage: "star.fill")
+                                .font(.caption.bold())
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+
+                    Text(symbol.name)
+                        .font(.largeTitle.bold())
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
             }
 
             Text(symbol.declaration)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.thinMaterial, in: .rect(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.quaternary, lineWidth: 1)
+                }
+        }
+        .padding(22)
+        .background(.regularMaterial, in: .rect(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
         }
     }
 }
@@ -255,7 +287,34 @@ private struct DetailPill: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(color.opacity(0.72), in: .capsule)
+            .background(color.opacity(0.72), in: .rect(cornerRadius: 6))
+    }
+}
+
+private struct DetailCanvasBackground: View {
+    var body: some View {
+        ZStack {
+            Color.primary.opacity(0.035)
+            LinearGradient(
+                colors: [
+                    .teal.opacity(0.08),
+                    .clear,
+                    .orange.opacity(0.07)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private extension SwiftUISymbolKind {
+    var detailTint: Color {
+        switch self {
+        case .view: .teal
+        case .modifier: .orange
+        }
     }
 }
 
@@ -292,18 +351,20 @@ struct HighlightedCodeBlock: View {
                 .contentTransition(.symbolEffect(.replace))
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 Text(SwiftSyntaxHighlighter.highlight(code, colorScheme: colorScheme))
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
-                    .padding(.vertical, 4)
+                    .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollIndicators(.hidden)
+            .background(.black.opacity(colorScheme == .dark ? 0.28 : 0.05), in: .rect(cornerRadius: 8))
         }
         .padding(18)
-        .background(codeBackground, in: .rect(cornerRadius: 10))
+        .background(codeBackground, in: .rect(cornerRadius: 12))
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
     }
