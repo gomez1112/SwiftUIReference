@@ -634,6 +634,7 @@ private extension SwiftUIExampleCatalog {
         canvasStrokeExample,
         canvasFillExample,
         textExample,
+        asyncImageExample,
         imageExample,
         colorExample,
         shapeExample(.circle),
@@ -850,6 +851,82 @@ private extension SwiftUIExampleCatalog {
             Text(\(ExampleFormat.stringLiteral(values.string("text", default: "Hello, SwiftUI"))))
                 .font(.system(size: \(ExampleFormat.number(values.cgFloat("size", default: 24))), weight: .\(weight.code)))
                 .foregroundStyle(\(values.color("color", default: .primary).code))
+            """
+        }
+    )
+
+    static let asyncImageExample = SwiftUIExample(
+        id: "view.asyncImage.remote",
+        title: "Remote Image",
+        summary: "Loads a remote image and renders loading, success, and failure states.",
+        match: SymbolExampleMatch(kind: .view, names: ["AsyncImage"]),
+        defaultValues: ExampleValues(
+            doubles: ["scale": 1, "cornerRadius": 14, "width": 220, "height": 150],
+            strings: ["url": "https://picsum.photos/seed/swiftui-reference/640/420"]
+        ),
+        preview: { values in
+            let url = URL(string: values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420"))
+            AsyncImage(url: url, scale: values.double("scale", default: 1)) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .background(.thinMaterial, in: .rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .clipShape(.rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                case .failure:
+                    ContentUnavailableView("Image failed", systemImage: "photo.badge.exclamationmark")
+                        .frame(
+                            width: values.cgFloat("width", default: 220),
+                            height: values.cgFloat("height", default: 150)
+                        )
+                        .background(.thinMaterial, in: .rect(cornerRadius: values.cgFloat("cornerRadius", default: 14)))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        },
+        controls: { values in
+            TextField("Image URL", text: values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420"))
+            LabeledSlider(label: "Scale", value: values.cgFloat("scale", default: 1), range: 0.5...3, unit: "x", step: 0.25)
+            LabeledSlider(label: "Width", value: values.cgFloat("width", default: 220), range: 120...360)
+            LabeledSlider(label: "Height", value: values.cgFloat("height", default: 150), range: 90...280)
+            LabeledSlider(label: "Corner Radius", value: values.cgFloat("cornerRadius", default: 14), range: 0...40)
+        },
+        code: { values in
+            """
+            AsyncImage(
+                url: URL(string: \(ExampleFormat.stringLiteral(values.string("url", default: "https://picsum.photos/seed/swiftui-reference/640/420")))),
+                scale: \(ExampleFormat.number(values.double("scale", default: 1)))
+            ) { phase in
+                switch phase {
+                case .empty:
+                    ProgressView()
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(
+                            width: \(ExampleFormat.number(values.cgFloat("width", default: 220))),
+                            height: \(ExampleFormat.number(values.cgFloat("height", default: 150)))
+                        )
+                        .clipShape(.rect(cornerRadius: \(ExampleFormat.number(values.cgFloat("cornerRadius", default: 14)))))
+                case .failure:
+                    ContentUnavailableView("Image failed", systemImage: "photo.badge.exclamationmark")
+                @unknown default:
+                    EmptyView()
+                }
+            }
             """
         }
     )

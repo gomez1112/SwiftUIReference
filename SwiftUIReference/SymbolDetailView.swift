@@ -101,7 +101,7 @@ struct SymbolDetailView: View {
     /// Static example for non-interactive symbols
     private func staticExampleCode(for symbol: IndexedSwiftSymbol) -> String {
         let rawSnippet = symbol.defaultInstantiation.strippingTokenize
-        let snippet = rawSnippet.ifNotEmpty ?? symbol.declaration
+        let snippet = rawSnippet.ifNotEmpty ?? defaultExample(for: symbol)
         guard symbol.kind == .modifier else {
             return snippet
         }
@@ -111,6 +111,14 @@ struct SymbolDetailView: View {
         Text("Hello, SwiftUI")
             \(modifierCall)
         """
+    }
+
+    private func defaultExample(for symbol: IndexedSwiftSymbol) -> String {
+        guard symbol.kind == .view else {
+            return symbol.declaration
+        }
+
+        return "\(symbol.name)()"
     }
 
     private func formattedModifierCall(from snippet: String) -> String {
