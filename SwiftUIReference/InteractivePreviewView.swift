@@ -1396,7 +1396,6 @@ struct SymbolInspectorPanel: View {
     let symbol: IndexedSwiftSymbol
     let interactiveSymbol: InteractiveSymbol?
     @Binding var state: PlaygroundState
-    @Environment(\.colorScheme) private var colorScheme
     @State private var summaryGenerator = SymbolSummaryGenerator()
 
     private var selectedExample: SwiftUIExample? {
@@ -1412,6 +1411,9 @@ struct SymbolInspectorPanel: View {
             name: symbol.name,
             kind: symbol.kind.singularTitle,
             category: symbol.categoryName,
+            platform: symbol.platform,
+            sdkVersion: symbol.sdkVersion,
+            availability: formattedAvailability,
             declaration: symbol.declaration,
             defaultInstantiation: symbol.defaultInstantiation.strippingTokenize,
             exampleTitle: example?.title,
@@ -1427,39 +1429,17 @@ struct SymbolInspectorPanel: View {
             Section {
                 Label(symbol.name, systemImage: symbol.kind.systemImage)
                     .font(.headline)
-            }
-
-            if let interactiveSymbol, interactiveSymbol.examples.count > 1, let selectedExample {
-                Section("Example") {
-                    ExamplePicker(
-                        examples: interactiveSymbol.examples,
-                        selection: selectedExampleIDBinding(fallback: selectedExample.id)
-                    )
-                }
-            }
-
-            if let selectedExample {
-                Section("Controls") {
-                    selectedExample.controls(values: valuesBinding(for: selectedExample))
-                        .id(selectedExample.id)
-                }
-
-                Section {
-                    Button("Reset Example") {
-                        withAnimation {
-                            state.reset(selectedExample)
-                        }
-                    }
-                }
-
-                Section("Generated Code") {
-                    Text(SwiftSyntaxHighlighter.highlight(
-                        selectedExample.code(values: state.values(for: selectedExample)),
-                        colorScheme: colorScheme
-                    ))
+                Text(symbol.declaration)
                     .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                }
+            }
+
+            Section("Metadata") {
+                InspectorMetadataRow(title: "Kind", value: symbol.kind.singularTitle)
+                InspectorMetadataRow(title: "Category", value: symbol.categoryName)
+                InspectorMetadataRow(title: "Platform", value: symbol.platform.ifNotEmpty ?? "iOS")
+                InspectorMetadataRow(title: "Availability", value: formattedAvailability)
             }
 
             FoundationModelSummarySection(
@@ -1481,21 +1461,40 @@ struct SymbolInspectorPanel: View {
         }
     }
 
-    private func selectedExampleIDBinding(fallback: String) -> Binding<String> {
-        Binding(
-            get: { state.selectedExampleID ?? fallback },
-            set: { newValue in
-                guard let interactiveSymbol else { return }
-                state.selectExample(id: newValue, for: interactiveSymbol)
-            }
-        )
+    private var formattedAvailability: String {
+        guard !symbol.availability.isEmpty else {
+            let sdkVersion = symbol.sdkVersion.ifNotEmpty ?? "current"
+            return "\(symbol.platform.ifNotEmpty ?? "iOS") SDK \(sdkVersion)"
+        }
+
+        return symbol.availability
+            .split(separator: ",")
+            .map { platformName(for: String($0)) }
+            .joined(separator: ", ")
     }
 
-    private func valuesBinding(for example: SwiftUIExample) -> Binding<ExampleValues> {
-        Binding(
-            get: { state.values(for: example) },
-            set: { state.valuesByExampleID[example.id] = $0 }
-        )
+    private func platformName(for rawValue: String) -> String {
+        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "ios": "iOS"
+        case "macosx": "macOS"
+        case "tvos": "tvOS"
+        case "watchos": "watchOS"
+        case "xros": "visionOS"
+        default: rawValue
+        }
+    }
+}
+
+private struct InspectorMetadataRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        LabeledContent(title) {
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
     }
 }
 
@@ -1508,11 +1507,12 @@ private struct FoundationModelSummarySection: View {
     }
 
     var body: some View {
-        Section("Foundation Model") {
-            if !generator.summary.isEmpty {
-                Text(generator.summary)
-                    .font(.callout)
-                    .textSelection(.enabled)
+        Section("Summary") {
+            if let summary = generator.summary {
+                SummaryField(title: "What it is", value: summary.whatItIs)
+                SummaryField(title: "When to use", value: summary.whenToUse)
+                SummaryField(title: "Availability", value: summary.availability)
+                SummaryField(title: "Implementation note", value: summary.implementationNote)
             }
 
             if let message {
@@ -1540,7 +1540,24 @@ private struct FoundationModelSummarySection: View {
             return "Summarizing"
         }
 
-        return generator.summary.isEmpty ? "Summarize Usage" : "Regenerate Summary"
+        return generator.summary == nil ? "Generate Summary" : "Regenerate Summary"
+    }
+}
+
+private struct SummaryField: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -2108,6 +2125,10 @@ enum ExampleFormat {
 }
 
 private extension String {
+    var ifNotEmpty: String? {
+        isEmpty ? nil : self
+    }
+
     func trimmingTrailingZeros() -> String {
         var value = self
         while value.contains(".") && value.last == "0" {
